@@ -1,14 +1,16 @@
 package main
 
 import (
-	"context"
-	"discard/user-service/pkg/models"
-	"log"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	controllers "discard/user-service/pkg/controllers"
+	logger "discard/user-service/pkg/logger"
+	messenger "discard/user-service/pkg/messenger"
+	middlewares "discard/user-service/pkg/middlewares"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -18,77 +20,57 @@ const (
 	RABBITMQ_SERVER_ADDRESS string = "amqp://guest:guest@rabbitmq:5672/"
 )
 
-var (
-	WARN  = log.New(os.Stderr, "[WARNING]\t", log.LstdFlags|log.Lmsgprefix)
-	ERROR = log.New(os.Stderr, "[ERROR]\t", log.LstdFlags|log.Lmsgprefix)
-	LOG   = log.New(os.Stdout, "[INFO]\t", log.LstdFlags|log.Lmsgprefix)
-)
-
-var pong = models.Response{
-	Message:    "pong!",
-	HttpStatus: 200,
-	Success:    true,
-}
-
-func ping(c *gin.Context) {
-	c.IndentedJSON(pong.HttpStatus, pong)
-}
-
-func failOnError(err error, msg string) {
-	if err != nil {
-		ERROR.Printf("%s: %s\n", msg, err)
-		panic(err)
-	}
-}
-
 func main() {
-	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
-	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
-	LOG.Println("Successfully connected to RabbitMQ!")
+	connected := false
+	var activeConnection *amqp.Connection = nil
+	for !connected {
+		conn, err := amqp.Dial(RABBITMQ_SERVER_ADDRESS)
+		if err != nil {
+			logger.WARN.Println("Failed to connect to RabbitMQ, retrying in 5 seconds...")
+			time.Sleep(5 * time.Second)
+		} else {
+			activeConnection = conn
+			connected = true
+		}
+	}
+	defer activeConnection.Close()
+	logger.LOG.Println("Successfully connected to RabbitMQ!")
 
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to create a channel")
-	defer ch.Close()
+	channel, err := activeConnection.Channel()
+	logger.FailOnError(err, "Failed to create a channel")
+	defer channel.Close()
 
-	queue, err := ch.QueueDeclare(
-		"hello", // name
-		false,   // durable
-		false,   // delete when unused
-		false,   // exclusive
-		false,   // no-wait
-		nil,     // arguments
+	queue, err := channel.QueueDeclare(
+		"delete-user", // name
+		false,         // durable
+		false,         // delete when unused
+		false,         // exclusive
+		false,         // no-wait
+		nil,           // arguments
 	)
-	failOnError(err, "Failed to declare a queue")
+	logger.FailOnError(err, "Failed to declare a queue")
 
-	LOG.Printf("Successfully declared a queue: %v\n", queue)
+	logger.LOG.Printf("Successfully declared a queue: %v\n", queue)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	body := "Hello World!"
-	err = ch.PublishWithContext(
-		ctx,     // context
-		"",      // exchange
-		"hello", // key
-		false,   // mandatory
-		false,   // immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(body),
-		}, // message
-	)
-	failOnError(err, "Failed to publish a message")
-
-	LOG.Printf("Successfully published a message to RabbitMQ: %v\n", body)
+	message := []byte("Hello, World!")
+	messenger.Message(channel, queue.Name, message)
+	logger.LOG.Printf("Successfully published a message to RabbitMQ: %v\n", string(message[:]))
 
 	fullAddress := strings.Join([]string{ADDRESS, PORT}, ":")
-	LOG.Printf("Starting API server on %v...\n", fullAddress)
+	logger.LOG.Printf("Starting API server on %v...\n", fullAddress)
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
-	router.GET("/ping", ping)
+	router.GET(
+		"/ping",
+		controllers.Ping,
+	)
+	router.POST(
+		"/delete-user",
+		middlewares.ForwardUserDeletionRequestMiddleware(channel, queue.Name, "Deletion request for user: "),
+		controllers.DeleteUser,
+	)
 
-	LOG.Printf("API server started on %v!\n", fullAddress)
-	failOnError(router.Run(fullAddress), "Failed to run the server")
+	logger.LOG.Printf("API server started on %v!\n", fullAddress)
+	logger.FailOnError(router.Run(fullAddress), "Failed to run the server")
 }
