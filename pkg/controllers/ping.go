@@ -2,13 +2,14 @@ package controllers
 
 import (
 	"discard/user-service/pkg/models"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 var pong = models.Response{
 	Message:    "pong!",
-	HttpStatus: 200,
+	HttpStatus: http.StatusOK,
 	Success:    true,
 }
 
