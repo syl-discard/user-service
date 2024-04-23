@@ -9,7 +9,7 @@ type Response struct {
 }
 
 type User struct {
-	ID string `json:"id" binding:"required,alphanum"`
+	ID string `json:"id" binding:"required,uuid"`
 }
 
 type Message []byte
