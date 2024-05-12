@@ -1,10 +1,12 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 
 	controllers "discard/user-service/pkg/controllers"
 	logger "discard/user-service/pkg/logger"
@@ -14,13 +16,14 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const (
-	ADDRESS                 string = "0.0.0.0"
-	PORT                    string = "8080"
-	RABBITMQ_SERVER_ADDRESS string = "amqp://guest:guest@rabbitmq:5672/"
-)
-
 func main() {
+	godotenv.Load()
+	var (
+		ADDRESS                 string = "0.0.0.0"
+		PORT                    string = "8080"
+		RABBITMQ_SERVER_ADDRESS string = os.Getenv("RABBITMQ_SERVER_ADDRESS")
+	)
+
 	connected := false
 	var activeConnection *amqp.Connection = nil
 	for !connected {
