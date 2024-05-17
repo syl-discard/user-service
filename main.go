@@ -70,7 +70,7 @@ func main() {
 	)
 	router.POST(
 		"/api/v1/user/delete",
-		middlewares.ForwardUserDeletionRequestMiddleware(channel, queue.Name, "Deletion request for user: "),
+		middlewares.ForwardUserDeletionRequestMiddleware(channel, queue.Name, "Deletion request gotten for user: "),
 		controllers.DeleteUser,
 	)
 
