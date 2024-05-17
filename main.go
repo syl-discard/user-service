@@ -65,11 +65,11 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 	router.GET(
-		"/ping",
+		"/api/v1/user/ping",
 		controllers.Ping,
 	)
 	router.POST(
-		"/delete-user",
+		"/api/v1/user/delete",
 		middlewares.ForwardUserDeletionRequestMiddleware(channel, queue.Name, "Deletion request for user: "),
 		controllers.DeleteUser,
 	)
