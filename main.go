@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	controllers "discard/user-service/pkg/controllers"
 	logger "discard/user-service/pkg/logger"
@@ -62,12 +64,33 @@ func main() {
 	fullAddress := strings.Join([]string{ADDRESS, PORT}, ":")
 	logger.LOG.Printf("Starting API server on %v...\n", fullAddress)
 
+	requestCounter := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "user_service_requests_total",
+			Help: "Total number of requests to the user service",
+		},
+	)
+
+	prometheus.MustRegister(requestCounter)
+
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+
+	router.Use(func(c *gin.Context) {
+		requestCounter.Inc()
+		c.Next()
+	})
+
 	router.GET(
 		"/api/v1/user/ping",
 		controllers.Ping,
 	)
+
+	router.GET(
+		"/metrics",
+		gin.WrapH(promhttp.Handler()),
+	)
+
 	router.POST(
 		"/api/v1/user/delete",
 		middlewares.ForwardUserDeletionRequestMiddleware(channel, queue.Name, "Deletion request gotten for user: "),
