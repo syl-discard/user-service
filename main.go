@@ -87,7 +87,7 @@ func main() {
 	)
 
 	router.GET(
-		"/metrics",
+		"/api/v1/user/metrics",
 		gin.WrapH(promhttp.Handler()),
 	)
 
